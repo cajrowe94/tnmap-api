@@ -1,0 +1,12 @@
+version: "3"
+services:
+    tnmap-api:
+        env_file: .env
+        build:
+            context: .
+            dockerfile: ${DOCKERFILE}
+        volumes:
+            - .:/app
+        restart: always
+        ports:
+        - '8000:8000'
