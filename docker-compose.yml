@@ -1,4 +1,4 @@
-version: "3"
+version: "3.5"
 services:
     tnmap-api:
         env_file: .env
@@ -9,4 +9,10 @@ services:
             - .:/app
         restart: always
         ports:
-        - '8000:8000'
+            - '8000:8000'
+        networks:
+            - mysql-network
+networks:
+    mysql-network:
+        name: mysql-network
+        external: true
