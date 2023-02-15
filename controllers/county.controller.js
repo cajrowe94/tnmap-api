@@ -19,7 +19,9 @@ connection.on('error', console.log);
 
 const getCounty = async (req, res, next) => {
 	connection.execute(
-		'SELECT * FROM county WHERE county_id = ?',
+		`SELECT * FROM county
+		LEFT JOIN plot ON county.county_id=plot.county_id
+		WHERE county.county_id = ?`,
 		[req.params.id],
 		(err, results) => {
 			res.send({
@@ -48,7 +50,7 @@ const findCounties = async (req, res, next) => {
 				queryString += ' WHERE ';
 			}
 
-			queryString += (`county.${bodyKeys[i]}='${bodyValues[i]}'`);
+			queryString += (`county.${bodyKeys[i]}=?`);
 
 			if (i !== (bodyKeys.length - 1)) {
 				queryString += ' AND ';
@@ -57,12 +59,48 @@ const findCounties = async (req, res, next) => {
 	}
 
 	connection.execute(
-		`SELECT * FROM county ${queryString}`,
+		`SELECT county.*, plot.plot_id, plot.plot_key, plot.plot_survey_date
+		FROM county
+		LEFT JOIN plot
+		ON county.county_id=plot.county_id
+		${queryString}`,
 		bodyValues,
 		(err, results) => {
+			let formattedResults = [];
+
+			results.forEach(result => {
+				let countyName = result.county_name;
+				let hasFormattedResult = false;
+
+				formattedResults.forEach(formattedResult => {
+					if (formattedResult.county_name == countyName) {
+						formattedResult.plots = formattedResult.plots || [];
+
+						formattedResult.plots.push(result);
+
+						hasFormattedResult = true;
+						return;
+					}
+				});
+
+				if (!hasFormattedResult) {
+					let newFormattedResult = {
+						county_id: result.county_id,
+						county_name: result.county_name,
+						plots: []
+					};
+
+					if (result.plot_id) {
+						newFormattedResult.plots.push(result);
+					}
+
+					formattedResults.push(newFormattedResult);
+				}
+			});
+
 			res.send({
 				error: err,
-				results: results
+				results: formattedResults
 			});
 		}
 	);

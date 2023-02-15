@@ -13,5 +13,5 @@ app.use(cors());
 app.use('/api', routes);
 
 app.listen(port, function() {
-  console.log("Server is running on Port: " + port);
+  console.log(`Server is running on port ${port}`);
 });
