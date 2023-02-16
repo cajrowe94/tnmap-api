@@ -19,14 +19,40 @@ connection.on('error', console.log);
 
 const getCounty = async (req, res, next) => {
 	connection.execute(
-		`SELECT * FROM county
+		`SELECT county.*, plot.plot_id, plot.plot_key, plot.plot_survey_date
+		FROM county
 		LEFT JOIN plot ON county.county_id=plot.county_id
 		WHERE county.county_id = ?`,
 		[req.params.id],
 		(err, results) => {
+			let formattedResult = [];
+
+			if (results.length) {
+				let countyName = results[0].county_name;
+				let countyId = results[0].county_id;
+
+				let newFormattedResult = {
+					county_id: countyId,
+					county_name: countyName,
+					plots: []
+				};
+
+				results.forEach(result => {
+					if (
+						result &&
+						result.county_id === countyId &&
+						result.plot_id
+					) {
+						newFormattedResult.plots.push(result);
+					}
+				});
+
+				formattedResult.push(newFormattedResult);
+			}
+
 			res.send({
 				error: err,
-				results: results
+				results: formattedResult
 			});
 		}
 	);
@@ -62,7 +88,7 @@ const findCounties = async (req, res, next) => {
 		`SELECT county.*, plot.plot_id, plot.plot_key, plot.plot_survey_date
 		FROM county
 		LEFT JOIN plot
-		ON county.county_id=plot.county_id
+		ON county.county_id = plot.county_id
 		${queryString}`,
 		bodyValues,
 		(err, results) => {
