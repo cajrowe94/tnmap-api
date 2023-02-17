@@ -1,7 +1,7 @@
-import mysql from 'mysql2';
+import mysql from 'mysql2/promise';
 import xlsx from 'node-xlsx';
 
-const connection = mysql.createConnection({
+const connection = await mysql.createConnection({
 	host: process.env.DATABASE_HOST,
 	port: process.env.DATABASE_PORT,
 	user: process.env.DATABASE_USER,
@@ -19,18 +19,18 @@ connection.on('error', console.log);
  */
 
 const getPlot = async (req, res, next) => {
-	connection.execute(
+	let results = await getPlotRow(req.params.id);
+	res.send(results);
+}
+
+const getPlotRow = async (plotId) => {
+	let [rowResults] = await connection.execute(
 		`SELECT * FROM plot
-		JOIN county ON plot.county_id=county.county_id
 		WHERE plot_id=?`,
-		[req.params.id],
-		(err, results) => {
-			res.send({
-				error: err,
-				results: results
-			});
-		}
+		[plotId]
 	);
+
+	return { rows: rowResults };
 }
 
 /**
@@ -59,18 +59,21 @@ const findPlots = async (req, res, next) => {
 		}
 	}
 
-	connection.execute(
-		`SELECT plot.*, county.county_name as county_name FROM plot
-		JOIN county ON plot.county_id = county.county_id
+	let results = await findPlotRow(queryString, bodyValues);
+
+	res.send({
+		results: results
+	})
+}
+
+const findPlotRow = async (queryString, bodyValues) => {
+	let [rowResults] = await connection.execute(
+		`SELECT plot.* FROM plot
 		${queryString}`,
-		bodyValues,
-		(err, results) => {
-			res.send({
-				error: err,
-				results: results
-			});
-		}
+		bodyValues
 	);
+
+	return { rows: rowResults }
 }
 
 /**
@@ -82,21 +85,16 @@ const findPlots = async (req, res, next) => {
 const updatePlotRows = async (req, res, next) => {
 	let fileObject = req.file;
 
-	if (!fileObject) {
-		res.send({ err: 'No file given' });
-		return;
-	}
+	if (!fileObject) { res.send({ error: 'No file given' }); return }
 
 	let fileExtension = fileObject.originalname.split('.').pop();
 
-	if (fileExtension !== 'xlsx') {
-		res.send({ err: 'xlsx file required' });
-		return;
-	}
+	if (fileExtension !== 'xlsx') { res.send({ error: 'Xlsx file required' }); return }
 
-	res.send({
-		parsedObject: parseFile(fileObject)
-	});
+	let parsedFile = parseFile(fileObject);
+	let updateResponse = await handlePlotRowUpdates(parsedFile);
+
+	res.send(updateResponse);
 }
 
 /**
@@ -195,6 +193,142 @@ const updatePlot = async (plot, county, item) => {
 	}
 
 	return response;
+}
+
+const handlePlotRowUpdates = async (parsedPlotData) => {
+    let response = [];
+
+    if (parsedPlotData.length) {
+		for (const item of parsedPlotData) {
+			let plotResults = await findPlotRowFromXlsxData(item);
+			let plotRow;
+
+			// new row was created
+			if (plotResults.insertId) {
+				let newlyCreatedRow = await getPlotRow(parseInt(plotResults.insertId));
+
+				if (newlyCreatedRow && newlyCreatedRow.rows.length) {
+					plotRow = newlyCreatedRow.rows[0];
+				}
+			} else {
+				// existing row was found
+				plotRow = plotResults;
+			}
+
+			let countyRowResults = await findCountyRow(
+				'WHERE county_name=?',
+				[item[0]]
+			);
+
+			// missing county row
+			if (!countyRowResults || !countyRowResults.rows.length) {
+				response.push({ error: `Missing county: ${item[0]}, for plot number: ${item[1]}` });
+			} else if (plotRow && countyRowResults.rows.length) {
+				let countyRow = countyRowResults.rows[0];
+
+				// let updatePlotResponse = await updatePlot(plot, county, item);
+
+				// response.push({
+				// 	updates: {
+				// 		plot: updatePlotResponse
+				// 	}
+				// });
+			} else {
+				response.push({ error: `Something went wrong with plot number: ${item[1]}, for county: ${item[0]}` });
+			}
+    	}
+
+    	return response;
+    }
+}
+
+const findCountyRow = async (queryString, bodyValues) => {
+	let [rowResults] = await connection.execute(
+		`SELECT county.* FROM county
+		${queryString}`,
+		bodyValues
+	);
+
+	return { rows: rowResults }
+}
+
+/**
+ * Use the xlsx data to find the matching plot row
+ * If none is found, create one
+ */
+
+const findPlotRowFromXlsxData = async (item) => {
+	const countyName = 0,
+        plotNumber = 1,
+        plotType = 2,
+        plotProtocol = 3,
+        plotSurveyDate = 4,
+        plotCrewOne = 5,
+        plotCrewTwo = 6,
+        plotCrewThree = 7,
+        plotCrewFour = 8;
+
+    if (item) {
+    	let parsedPlotNumber = parseInt(item[plotNumber]);
+		let plotCountyName = item[countyName];
+
+		if (
+			parsedPlotNumber &&
+			plotCountyName
+		) {
+			let plotKey = plotCountyName.toLowerCase() + '-plot-' + parsedPlotNumber;
+
+			let plotQueryResults = await findPlotRow(
+				'WHERE plot.plot_key=?',
+				[plotKey]
+			);
+
+    		if (
+    			!plotQueryResults ||
+    			!plotQueryResults.rows.length
+			) {
+				try {
+					// create a new plot
+	    			let [newPlotRow] = await connection.execute(
+	    				`INSERT INTO plot (
+	    					plot_key,
+	    					plot_number,
+	    					plot_type,
+	    					plot_protocol,
+	    					plot_survey_date,
+	    					plot_crew_one,
+	    					plot_crew_two,
+	    					plot_crew_three,
+	    					plot_crew_four
+						)
+						VALUES (?,?,?,?,?,?,?,?,?)
+						`,
+						[
+							plotKey || null,
+							parsedPlotNumber || null,
+							item[plotType] || null,
+							item[plotProtocol] || null,
+							item[plotSurveyDate] || null,
+							item[plotCrewOne] || null,
+							item[plotCrewTwo] || null,
+							item[plotCrewThree] || null,
+							item[plotCrewFour] || null
+						]
+					);
+
+					return newPlotRow;
+				} catch (err) {
+					return { error: err.message }
+				}
+			}
+
+    		return plotQueryResults.rows[0];
+		} else {
+			return [{ error: `Invalid row with plot number: ${item[plotNumber]}, county name: ${item[countyName]}` }];
+		}
+    } else {
+    	return null;
+    }
 }
 
 /**

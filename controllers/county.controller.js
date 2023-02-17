@@ -17,7 +17,7 @@ connection.on('error', console.log);
  * /api/county/:id
  */
 
-const getCounty = async (req, res, next) => {
+const getCounty = (req, res, next) => {
 	connection.execute(
 		`SELECT county.*, plot.plot_id, plot.plot_key, plot.plot_survey_date
 		FROM county
@@ -64,7 +64,7 @@ const getCounty = async (req, res, next) => {
  * /api/counties
  */
 
-const findCounties = async (req, res, next) => {
+const findCounties = (req, res, next) => {
 	let body = req.body;
 	let bodyKeys = Object.keys(body);
 	let bodyValues = Object.values(body);
