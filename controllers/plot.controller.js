@@ -23,6 +23,12 @@ const getPlot = async (req, res, next) => {
 	res.send(results);
 }
 
+
+/**
+ * -----------------------
+ * Get plot row by ID
+ */
+
 const getPlotRow = async (plotId) => {
 	let [rowResults] = await connection.execute(
 		`SELECT * FROM plot
@@ -32,6 +38,7 @@ const getPlotRow = async (plotId) => {
 
 	return { rows: rowResults };
 }
+
 
 /**
  * -----------------------
@@ -66,6 +73,12 @@ const findPlots = async (req, res, next) => {
 	})
 }
 
+
+/**
+ * -----------------------
+ * Find plot row(s) with query
+ */
+
 const findPlotRow = async (queryString, bodyValues) => {
 	let [rowResults] = await connection.execute(
 		`SELECT plot.* FROM plot
@@ -75,6 +88,7 @@ const findPlotRow = async (queryString, bodyValues) => {
 
 	return { rows: rowResults }
 }
+
 
 /**
  * -----------------------
@@ -97,103 +111,11 @@ const updatePlotRows = async (req, res, next) => {
 	res.send(updateResponse);
 }
 
+
 /**
- * Handle plot updates
+ * -----------------------
+ * Initiates creation and or updates to plot rows
  */
-
-const updatePlot = async (plot, county, item) => {
-	const countyName = 0,
-        plotNumber = 1,
-        plotType = 2,
-        plotProtocol = 3,
-        plotSurveyDate = 4,
-        plotCrewOne = 5,
-        plotCrewTwo = 6,
-        plotCrewThree = 7,
-        plotCrewFour = 8;
-
-	let plotData = plot[0];
-	let countyData = county[0];
-
-	let updateData = {
-		data: {}
-	}
-
-	let response = {
-		messages: [],
-		plotData: null
-	}
-
-	// plot has no county
-	if (
-		!plotData.county &&
-		countyData.id
-	) {
-		updateData.data.county = { id: countyData.id };
-		response.messages.push(`Updated plot county field with: ${countyData.countyName}`);
-	}
-
-	// check for any updated fields
-	// love me some if statements :/
-
-	// plot number
-	if (parseInt(plotData.plotNumber) != parseInt(item[plotNumber])) {
-		updateData.data.plotNumber = parseInt(item[plotNumber]);
-		response.messages.push(`Changed plot number from ${plotData.plotNumber} to ${item[plotNumber]}`);
-	}
-
-	// plot type
-	if (plotData.plotType != item[plotType]) {
-		updateData.data.plotType = item[plotType];
-		response.messages.push(`Changed plot type from ${plotData.plotType} to ${item[plotType]}`);
-	}
-
-	// plot protocol
-	if (plotData.plotProtocol != item[plotProtocol]) {
-		updateData.data.plotProtocol = item[plotProtocol];
-		response.messages.push(`Changed plot protocol from ${plotData.plotProtocol} to ${item[plotProtocol]}`);
-	}
-
-	// plot survey date
-	if (plotData.plotSurveyDate != item[plotSurveyDate]) {
-		updateData.data.plotSurveyDate = item[plotSurveyDate];
-		response.messages.push(`Changed plot survey date from ${plotData.plotSurveyDate} to ${item[plotSurveyDate]}`);
-	}
-
-	// plot crew one
-	if (plotData.plotCrewOne != item[plotCrewOne]) {
-		updateData.data.plotCrewOne = item[plotCrewOne];
-		response.messages.push(`Changed plot crew one from ${plotData.plotCrewOne} to ${item[plotCrewOne]}`);
-	}
-
-	// plot crew two
-	if (plotData.plotCrewTwo != item[plotCrewTwo]) {
-		updateData.data.plotCrewTwo = item[plotCrewTwo];
-		response.messages.push(`Changed plot crew two from ${plotData.plotCrewTwo} to ${item[plotCrewTwo]}`);
-	}
-
-	// plot crew three
-	if (plotData.plotCrewThree != item[plotCrewThree]) {
-		updateData.data.plotCrewThree = item[plotCrewThree];
-		response.messages.push(`Changed plot crew three from ${plotData.plotCrewThree} to ${item[plotCrewThree]}`);
-	}
-
-	// plot crew four
-	if (plotData.plotCrewFour != item[plotCrewFour]) {
-		updateData.data.plotCrewFour = item[plotCrewFour];
-		response.messages.push(`Changed plot crew four from ${plotData.plotCrewFour} to ${item[plotCrewFour]}`);
-	}
-
-	// run an update if there are any changes
-	if (Object.keys(updateData.data).length > 0) {
-		const updatedPlot = await strapi.entityService.update('api::plot.plot', plotData.id, updateData);
-		response.plotData = updatedPlot;
-	} else {
-		response.messages.push(`No changes for ${plotData.plotId}`);
-	}
-
-	return response;
-}
 
 const handlePlotRowUpdates = async (parsedPlotData) => {
     let response = [];
@@ -205,19 +127,22 @@ const handlePlotRowUpdates = async (parsedPlotData) => {
 
 			// new row was created
 			if (plotResults.insertId) {
-				let newlyCreatedRow = await getPlotRow(parseInt(plotResults.insertId));
+				let newPlotRow = await getPlotRow(parseInt(plotResults.insertId));
 
-				if (newlyCreatedRow && newlyCreatedRow.rows.length) {
-					plotRow = newlyCreatedRow.rows[0];
+				if (newPlotRow && newPlotRow.rows.length) {
+					plotRow = newPlotRow.rows[0];
+					plotRow.new = true;
 				}
-			} else {
+			} else if (plotResults.plot_id) {
 				// existing row was found
 				plotRow = plotResults;
 			}
 
+			let countyName = item[0] || null;
+
 			let countyRowResults = await findCountyRow(
 				'WHERE county_name=?',
-				[item[0]]
+				[countyName]
 			);
 
 			// missing county row
@@ -225,14 +150,13 @@ const handlePlotRowUpdates = async (parsedPlotData) => {
 				response.push({ error: `Missing county: ${item[0]}, for plot number: ${item[1]}` });
 			} else if (plotRow && countyRowResults.rows.length) {
 				let countyRow = countyRowResults.rows[0];
+				let updatePlotResponse = await updatePlot(plotRow, countyRow, item);
 
-				// let updatePlotResponse = await updatePlot(plot, county, item);
-
-				// response.push({
-				// 	updates: {
-				// 		plot: updatePlotResponse
-				// 	}
-				// });
+				response.push({
+					updates: {
+						plot: updatePlotResponse
+					}
+				});
 			} else {
 				response.push({ error: `Something went wrong with plot number: ${item[1]}, for county: ${item[0]}` });
 			}
@@ -241,6 +165,132 @@ const handlePlotRowUpdates = async (parsedPlotData) => {
     	return response;
     }
 }
+
+/**
+ * -----------------------
+ * Performs updates to a plot row
+ */
+
+const updatePlot = async (plotRow, countyRow, item) => {
+	const countyName = 0,
+        plotNumber = 1,
+        plotType = 2,
+        plotProtocol = 3,
+        plotSurveyDate = 4,
+        plotCrewOne = 5,
+        plotCrewTwo = 6,
+        plotCrewThree = 7,
+        plotCrewFour = 8;
+
+	let updateData = {}
+
+	let response = {
+		messages: [],
+		// plotRow: null
+	}
+
+	if (plotRow.new) {
+		response.messages.push(`New plot row created: ${plotRow.plot_key}`);
+		// response.plotRow = plotRow;
+	}
+
+	// plot has no county
+	if (
+		!plotRow.county_id &&
+		countyRow.county_id
+	) {
+		updateData.county_id = countyRow.county_id;
+		response.messages.push(`[${plotRow.plot_key}] Updated county to ${countyRow.county_name}`);
+	}
+
+	// check for any updated fields
+	// love me some if statements :/
+	
+	if (!plotRow.new) {
+		// plot number
+		if (parseInt(plotRow.plot_number) != parseInt(item[plotNumber])) {
+			updateData.plot_number = parseInt(item[plotNumber]) || null;
+			response.messages.push(`[${plotRow.plot_key}] Changed plot number from ${plotRow.plot_number} to ${updateData.plot_number}`);
+		}
+
+		// plot type
+		if (plotRow.plot_type != item[plotType]) {
+			updateData.plot_type = item[plotType] || null;
+			response.messages.push(`[${plotRow.plot_key}] Changed plot type from ${plotRow.plot_type} to ${updateData.plot_type}`);
+		}
+
+		// plot protocol
+		if (plotRow.plot_protocol != item[plotProtocol]) {
+			updateData.plot_protocol = item[plotProtocol] || null;
+			response.messages.push(`[${plotRow.plot_key}] Changed protocol from ${plotRow.plot_protocol} to ${updateData.plot_protocol}`);
+		}
+
+		// plot survey date
+		if (plotRow.plot_survey_date != item[plotSurveyDate]) {
+			updateData.plot_survey_date = item[plotSurveyDate] || null;
+			response.messages.push(`[${plotRow.plot_key}] Changed survey date from ${plotRow.plot_survey_date} to ${updateData.plot_survey_date}`);
+		}
+
+		// plot crew one
+		if (plotRow.plot_crew_one != item[plotCrewOne]) {
+			updateData.plot_crew_one = item[plotCrewOne] || null;
+			response.messages.push(`[${plotRow.plot_key}] Changed crew one from ${plotRow.plot_crew_one} to ${updateData.plot_crew_one}`);
+		}
+
+		// plot crew two
+		if (plotRow.plot_crew_two != item[plotCrewTwo]) {
+			updateData.plot_crew_two = item[plotCrewTwo] || null;
+			response.messages.push(`[${plotRow.plot_key}] Changed crew two from ${plotRow.plot_crew_two} to ${updateData.plot_crew_two}`);
+		}
+
+		// plot crew three
+		if (plotRow.plot_crew_three != item[plotCrewThree]) {
+			updateData.plot_crew_three = item[plotCrewThree] || null;
+			response.messages.push(`[${plotRow.plot_key}] Changed crew three from ${plotRow.plot_crew_three} to ${updateData.plot_crew_three}`);
+		}
+
+		// plot crew four
+		if (plotRow.plot_crew_four != item[plotCrewFour]) {
+			updateData.plot_crew_four = item[plotCrewFour] || null;
+			response.messages.push(`[${plotRow.plot_key}] Changed crew four from ${plotRow.plot_crew_four} to ${updateData.plot_crew_four}`);
+		}
+	}
+
+	// run an update if there are any changes
+	if (Object.keys(updateData).length > 0) {
+		let SET = '';
+		let count = 0;
+		let keysLength = Object.keys(updateData).length;
+
+		// create the set clause
+		for (let key in updateData) {
+			count++;
+			SET += `${key} = ?${count !== keysLength ? ',' : ''}`
+		}
+
+		let updatedPlotRow = await connection.execute(
+			`
+			UPDATE plot
+			SET ${SET}
+			WHERE plot_id = ?;
+			`,
+			[...Object.values(updateData), plotRow.plot_id]
+		);
+
+		// response.plotRow = updatedPlotRow;
+	} else {
+		response.messages.push(`[${plotRow.plot_key}] No changes`);
+		// response.plotRow = plotRow;
+	}
+
+	return response;
+}
+
+
+/**
+ * -----------------------
+ * County row query
+ */
 
 const findCountyRow = async (queryString, bodyValues) => {
 	let [rowResults] = await connection.execute(
@@ -251,6 +301,7 @@ const findCountyRow = async (queryString, bodyValues) => {
 
 	return { rows: rowResults }
 }
+
 
 /**
  * Use the xlsx data to find the matching plot row
@@ -331,6 +382,7 @@ const findPlotRowFromXlsxData = async (item) => {
     }
 }
 
+
 /**
  * Parse xlsx file into usable json
  */
@@ -352,6 +404,7 @@ const parseFile = (fileObject) => {
 		return { data: [] }
 	}
 }
+
 
 /**
  * -----------------------

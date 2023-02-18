@@ -58,6 +58,7 @@ const getCounty = (req, res, next) => {
 	);
 }
 
+
 /**
  * -----------------------
  * Find counties
@@ -131,6 +132,7 @@ const findCounties = (req, res, next) => {
 		}
 	);
 }
+
 
 /**
  * -----------------------
