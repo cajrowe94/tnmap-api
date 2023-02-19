@@ -1,16 +1,16 @@
 import express from 'express';
 import multer from 'multer';
-import { county, plot } from '../controllers/index.js';
+import { county, plot, auth } from '../controllers/index.js';
 
 const router = express.Router();
 
 /* GET County */
-router.get('/county/:id', county.getCounty);
-router.get('/counties', county.findCounties);
+router.get('/county/:id', [auth.verifyApiToken, county.getCounty]);
+router.get('/counties', [auth.verifyApiToken, county.findCounties]);
 
 /* GET Plot */
-router.get('/plot/:id', plot.getPlot);
-router.get('/plots', plot.findPlots);
+router.get('/plot/:id', [auth.verifyApiToken, plot.getPlot]);
+router.get('/plots', [auth.verifyApiToken, plot.findPlots]);
 
 /* POST Update Plot Rows */
 const storage = multer.diskStorage({
@@ -24,6 +24,6 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage: storage });
 
-router.post('/update-plot-rows', upload.single('xlsx-file'), plot.updatePlotRows);
+router.post('/update-plot-rows', [auth.verifyApiToken, upload.single('xlsx-file'), plot.updatePlotRows]);
 
 export default router;

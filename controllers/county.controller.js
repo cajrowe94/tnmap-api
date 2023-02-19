@@ -8,8 +8,6 @@ const connection = mysql.createConnection({
 	database: process.env.DATABASE_NAME
 });
 
-connection.on('error', console.log);
-
 
 /**
  * -----------------------

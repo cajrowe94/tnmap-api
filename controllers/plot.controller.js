@@ -9,8 +9,6 @@ const connection = await mysql.createConnection({
 	database: process.env.DATABASE_NAME
 });
 
-connection.on('error', console.log);
-
 
 /**
  * -----------------------
