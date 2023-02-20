@@ -20,7 +20,7 @@ const verifyApiToken = async (req, res, next) => {
 
 	if (!apiToken) {
 		let loggedRequest = await logRequest(req);
-		res.status(401).send('Unauthorized. Ask Caleb for permission!');
+		res.status(401).send({ error: 'Unauthorized. Ask Caleb for permission!' });
 		return;
 	}
 
@@ -66,14 +66,14 @@ const verifyApiToken = async (req, res, next) => {
 			return;
 		} else {
 			let loggedRequest = await logRequest(req);
-			res.status(401).send('Unauthorized. Ask Caleb for permission!');
+			res.status(401).send({ error: 'Unauthorized. Ask Caleb for permission!' });
 			return;
 		}
 
 	}
 
 	let loggedRequest = await logRequest(req);
-	res.status(401).send('Unauthorized. Ask Caleb for permission!');
+	res.status(401).send({ error: 'Unauthorized. Ask Caleb for permission!' });
 }
 
 

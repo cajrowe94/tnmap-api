@@ -12,7 +12,11 @@ services:
             - '8000:8000'
         networks:
             - mysql-network
+            - api-network
 networks:
     mysql-network:
         name: mysql-network
         external: true
+    api-network:
+        name: api-network
+        driver: bridge
